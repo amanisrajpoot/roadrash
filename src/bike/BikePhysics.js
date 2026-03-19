@@ -48,6 +48,19 @@ export class BikePhysics {
         this.mesh.position.x += this.currentTurn * this.turnSpeed * delta;
         this.mesh.position.z += this.speed * delta;
         
+        // Road Boundaries & Off-road Physics
+        const ROAD_EDGE = 10.0;
+        const WORLD_LIMIT = 15.0;
+        
+        if (Math.abs(this.mesh.position.x) > ROAD_EDGE) {
+            this.speed *= 0.97; // Grass drag
+            // Subtly push back towards road
+            this.mesh.position.x = THREE.MathUtils.lerp(this.mesh.position.x, Math.sign(this.mesh.position.x) * ROAD_EDGE, 2 * delta);
+        }
+        
+        // Hard clamp to prevent escaping the map
+        this.mesh.position.x = THREE.MathUtils.clamp(this.mesh.position.x, -WORLD_LIMIT, WORLD_LIMIT);
+        
         // Tilt effect (rotation.z)
         const targetTilt = this.currentTurn * this.tiltMax;
         this.currentTilt = THREE.MathUtils.lerp(this.currentTilt, targetTilt, 8 * delta);

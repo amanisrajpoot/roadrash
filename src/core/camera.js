@@ -18,18 +18,20 @@ export function createCamera() {
 export function updateCameraFollow(camera, target, delta) {
     if (!target) return;
     
-    // Ideal offset from target
-    const idealOffset = new THREE.Vector3(0, 2.5, -6);
-    idealOffset.applyQuaternion(target.quaternion);
-    idealOffset.add(target.position);
+    // Position camera behind and above
+    const offset = new THREE.Vector3(0, 4.5, -10.0);
+    offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), target.rotation.y);
+    const targetPos = target.position.clone().add(offset);
     
-    // Ideal look at point
-    const idealLookAt = new THREE.Vector3(0, 1.5, 5);
-    idealLookAt.applyQuaternion(target.quaternion);
-    idealLookAt.add(target.position);
+    // Smooth lerp
+    camera.position.lerp(targetPos, 0.1);
     
-    // Lerp camera position for smoothness
-    const t = 1.0 - Math.pow(0.001, delta);
-    camera.position.lerp(idealOffset, t);
-    camera.lookAt(idealLookAt);
+    // Look ahead of the bike
+    const lookOffset = new THREE.Vector3(0, 1, 15);
+    lookOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), target.rotation.y);
+    const lookAtPoint = target.position.clone().add(lookOffset);
+    
+    // Force upright and look at
+    camera.up.set(0, 1, 0);
+    camera.lookAt(lookAtPoint);
 }

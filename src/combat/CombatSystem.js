@@ -30,7 +30,9 @@ export class CombatSystem {
         
         if (target) {
             this.applyCombatEffect(target, type);
+            return true;
         }
+        return false;
     }
     
     findNearbyTarget(range) {

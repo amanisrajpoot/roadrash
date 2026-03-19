@@ -18,12 +18,31 @@ const camera = createCamera();
 const controller = new BikeController();
 const effectsManager = new EffectsManager(camera);
 
-// ... Bike Setup
-const bikeGeometry = new THREE.BoxGeometry(0.5, 1, 2);
-const bikeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const bike = new THREE.Mesh(bikeGeometry, bikeMaterial);
-bike.position.set(0, 0.5, 0);
-bike.castShadow = true;
+// Better Bike Placeholder (Group)
+const bike = new THREE.Group();
+
+// Main body
+const bodyGeo = new THREE.BoxGeometry(0.4, 0.8, 1.8);
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.5, metalness: 0.5 });
+const body = new THREE.Mesh(bodyGeo, bodyMat);
+body.castShadow = true;
+bike.add(body);
+
+// Front wheel
+const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 12);
+const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+frontWheel.rotation.z = Math.PI / 2;
+frontWheel.position.set(0, -0.2, 0.7);
+bike.add(frontWheel);
+
+// Back wheel
+const backWheel = new THREE.Mesh(wheelGeo, wheelMat);
+backWheel.rotation.z = Math.PI / 2;
+backWheel.position.set(0, -0.2, -0.7);
+bike.add(backWheel);
+
+bike.position.set(0, 0.6, 0);
 scene.add(bike);
 
 const bikePhysics = new BikePhysics(bike);
@@ -41,36 +60,49 @@ const enemyAI = new EnemyAI(scene, bike);
 const combatSystem = new CombatSystem(bike, [trafficManager, enemyAI], effectsManager);
 
 let totalTime = 0;
-const uiElement = document.getElementById('ui');
+let timeScale = 1.0;
+const speedFill = document.getElementById('speed-fill');
+const healthFill = document.getElementById('health-fill');
 
 function update(delta) {
-    totalTime += delta;
+    // Recover from hit-stop
+    timeScale = THREE.MathUtils.lerp(timeScale, 1.0, 6 * delta);
+    const scaledDelta = delta * timeScale;
+    
+    totalTime += scaledDelta;
     
     // Update bike physics with keyboard input
-    bikePhysics.update(delta, controller.keys);
+    bikePhysics.update(scaledDelta, controller.keys);
     
     // Update road recycling
     roadManager.update(bike.position.z);
     
     // Update traffic
-    trafficManager.update(delta, bike.position.z);
+    trafficManager.update(scaledDelta, bike.position.z);
     
     // Update Enemy AI
-    enemyAI.update(delta, totalTime);
+    enemyAI.update(scaledDelta, totalTime);
     
     // Update effects (FOV, Shake)
     effectsManager.update(delta, bikePhysics.speed);
     
-    // Update UI
-    uiElement.innerHTML = `
-        <h1>ROAD RASH CLONE</h1>
-        <p>SPEED: ${Math.round(bikePhysics.speed)} MPH</p>
-        <p>J: PUNCH | K: KICK | WASD: MOVE</p>
-    `;
+    // Update UI Bars
+    if (speedFill) {
+        const speedPercent = (bikePhysics.speed / bikePhysics.maxSpeed) * 100;
+        speedFill.style.width = `${Math.min(100, speedPercent)}%`;
+    }
+    if (healthFill) {
+        // Simple placeholder for health (decrease on crash)
+        const healthPercent = bikePhysics.isCrashed ? 20 : 100;
+        healthFill.style.width = `${healthPercent}%`;
+    }
     
     // Update combat
     if (!bikePhysics.isCrashed) {
-        combatSystem.update(delta, totalTime, controller.keys);
+        const hit = combatSystem.update(scaledDelta, totalTime, controller.keys);
+        if (hit) {
+            timeScale = 0.15; // "Hit Stop" effect
+        }
     }
     
     // Update camera follow

@@ -15,15 +15,26 @@ export class RoadManager {
     init() {
         // Road surface geometry
         const roadGeometry = new THREE.PlaneGeometry(this.roadWidth, this.tileSize);
-        const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const roadMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x222222, 
+            roughness: 0.8,
+            metalness: 0.2
+        });
         
         // Shoulder/Grass geometry
         const grassGeometry = new THREE.PlaneGeometry(this.shoulderWidth, this.tileSize);
-        const grassMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+        const grassMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x1a4a1a, 
+            roughness: 0.9 
+        });
         
         // Stripe geometry
-        const stripeGeometry = new THREE.PlaneGeometry(0.3, 10);
-        const stripeMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaa00 });
+        const stripeGeometry = new THREE.PlaneGeometry(0.4, 12);
+        const stripeMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xffcc00, 
+            emissive: 0xffcc00,
+            emissiveIntensity: 0.2
+        });
         
         for (let i = 0; i < this.numTiles; i++) {
             const tile = new THREE.Group();

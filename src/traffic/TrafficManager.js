@@ -29,12 +29,23 @@ export class TrafficManager {
             car.receiveShadow = true;
             car.visible = false;
             
-            // Simple "roof" mesh for better look
-            const roofGeo = new THREE.BoxGeometry(1.8, 0.8, 2);
-            const roof = new THREE.Mesh(roofGeo, carMaterial);
-            roof.position.y = 1;
-            roof.position.z = -0.5;
-            car.add(roof);
+            // Four wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 12);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+            
+            const wheelPositions = [
+                { x: 1, y: -0.4, z: 1.5 },
+                { x: -1, y: -0.4, z: 1.5 },
+                { x: 1, y: -0.4, z: -1.5 },
+                { x: -1, y: -0.4, z: -1.5 }
+            ];
+            
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.position.set(pos.x, pos.y, pos.z);
+                wheel.rotation.z = Math.PI / 2;
+                car.add(wheel);
+            });
             
             this.scene.add(car);
             this.pool.push(car);

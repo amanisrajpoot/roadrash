@@ -4,13 +4,13 @@ export function createScene() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb); // Sky blue
     
-    // Ambient light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
+    // Hemisphere Light (Sky/Ground)
+    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x444444, 1.0);
+    scene.add(hemiLight);
     
     // Directional light (Sun)
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-    sunLight.position.set(100, 100, 50);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    sunLight.position.set(50, 100, 50);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
@@ -23,8 +23,8 @@ export function createScene() {
     
     scene.add(sunLight);
     
-    // Fog for depth
-    scene.fog = new THREE.Fog(0x87ceeb, 10, 200);
+    // Fog for depth (closer and thicker)
+    scene.fog = new THREE.Fog(0x87ceeb, 20, 150);
     
     return scene;
 }
