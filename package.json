@@ -1,0 +1,27 @@
+{
+  "name": "roadrash",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amanisrajpoot/roadrash.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/amanisrajpoot/roadrash/issues"
+  },
+  "homepage": "https://github.com/amanisrajpoot/roadrash#readme",
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "three": "^0.183.2",
+    "vite": "^8.0.1"
+  }
+}
