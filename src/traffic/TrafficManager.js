@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 
 export class TrafficManager {
-    constructor(scene) {
+    constructor(scene, assetLoader) {
         this.scene = scene;
+        this.loader = assetLoader;
         this.pool = [];
         this.activeCars = [];
-        this.maxPoolSize = 20;
+        this.maxPoolSize = 15;
         this.spawnDistance = 400;
         this.despawnDistance = 100;
         this.roadWidth = 14; 
@@ -14,41 +15,14 @@ export class TrafficManager {
     }
     
     initPool() {
-        const carGeometry = new THREE.BoxGeometry(2.2, 1.4, 4.5);
-        const colors = [0x1a73e8, 0xe84118, 0x4cd137, 0xfbc531, 0x718093, 0x2f3640];
+        if (!this.loader) return;
         
         for (let i = 0; i < this.maxPoolSize; i++) {
-            const color = colors[i % colors.length];
-            const carMaterial = new THREE.MeshStandardMaterial({ 
-                color,
-                roughness: 0.5,
-                metalness: 0.5
-            });
-            const car = new THREE.Mesh(carGeometry, carMaterial);
-            car.castShadow = true;
-            car.receiveShadow = true;
-            car.visible = false;
-            
-            // Four wheels
-            const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 12);
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-            
-            const wheelPositions = [
-                { x: 1, y: -0.4, z: 1.5 },
-                { x: -1, y: -0.4, z: 1.5 },
-                { x: 1, y: -0.4, z: -1.5 },
-                { x: -1, y: -0.4, z: -1.5 }
-            ];
-            
-            wheelPositions.forEach(pos => {
-                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-                wheel.position.set(pos.x, pos.y, pos.z);
-                wheel.rotation.z = Math.PI / 2;
-                car.add(wheel);
-            });
-            
-            this.scene.add(car);
-            this.pool.push(car);
+            const car = this.loader.getClone('car');
+            if (car) {
+                car.visible = false;
+                this.pool.push(car);
+            }
         }
     }
     
@@ -57,33 +31,37 @@ export class TrafficManager {
         
         const car = this.pool.pop();
         car.visible = true;
+        this.scene.add(car);
         
         // Random lane position
-        const x = (Math.random() - 0.5) * this.roadWidth;
-        const z = playerZ + this.spawnDistance + (Math.random() * 200);
+        const x = (Math.random() - 0.5) * (this.roadWidth - 4);
+        const z = playerZ + this.spawnDistance + (Math.random() * 300);
         
-        car.position.set(x, 0.7, z);
+        car.position.set(x, 0.05, z); // 0.05 for slight clearance/avoiding z-fight, but visibly grounded
+        car.rotation.y = 0; // Fix: 0 should be forward (+Z) for the car model if Math.PI was facing player
+        car.scale.set(1.4, 1.4, 1.4); // Sweet spot between "toy" and "too big"
         
-        // Random speed, mostly slower than player's cruising speed
-        car.speed = 15 + Math.random() * 15; 
+        // Slower than player max speed (80)
+        car.speed = 15 + Math.random() * 25; 
         
         this.activeCars.push(car);
     }
     
     update(delta, playerZ) {
-        // Maintain a few cars ahead
-        if (this.activeCars.length < 10 && Math.random() < 0.1) {
+        // Significantly less dense spawning as requested
+        if (this.activeCars.length < 3 && Math.random() < 0.005) {
             this.spawn(playerZ);
         }
         
         for (let i = this.activeCars.length - 1; i >= 0; i--) {
             const car = this.activeCars[i];
             
-            // Move car forward
+            // Move car forward (+Z)
             car.position.z += car.speed * delta;
             
-            // Check for despawn (passed behind player)
-            if (playerZ - car.position.z > this.despawnDistance) {
+            // Despawn if too far ahead OR passed by player
+            const relativeZ = car.position.z - playerZ;
+            if (relativeZ < -50 || relativeZ > 800) {
                 this.despawn(car, i);
             }
         }
@@ -91,6 +69,7 @@ export class TrafficManager {
     
     despawn(car, index) {
         car.visible = false;
+        this.scene.remove(car); // Remove when despawned
         this.activeCars.splice(index, 1);
         this.pool.push(car);
     }

@@ -10,125 +10,177 @@ import { TrafficManager } from './src/traffic/TrafficManager.js';
 import { CombatSystem } from './src/combat/CombatSystem.js';
 import { EnemyAI } from './src/ai/EnemyAI.js';
 import { EffectsManager } from './src/utils/effects.js';
+import { AssetLoader } from './src/utils/AssetLoader.js';
+import { PropManager } from './src/world/PropManager.js';
+import { AudioManager } from './src/utils/AudioManager.js';
 
+// --- Essential Setup ---
 const renderer = createRenderer();
 const scene = createScene();
 const camera = createCamera();
-
 const controller = new BikeController();
 const effectsManager = new EffectsManager(camera);
+const assetLoader = new AssetLoader();
+const audioManager = new AudioManager();
 
-// Better Bike Placeholder (Group)
-const bike = new THREE.Group();
-
-// Main body
-const bodyGeo = new THREE.BoxGeometry(0.4, 0.8, 1.8);
-const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.5, metalness: 0.5 });
-const body = new THREE.Mesh(bodyGeo, bodyMat);
-body.castShadow = true;
-bike.add(body);
-
-// Front wheel
-const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 12);
-const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
-frontWheel.rotation.z = Math.PI / 2;
-frontWheel.position.set(0, -0.2, 0.7);
-bike.add(frontWheel);
-
-// Back wheel
-const backWheel = new THREE.Mesh(wheelGeo, wheelMat);
-backWheel.rotation.z = Math.PI / 2;
-backWheel.position.set(0, -0.2, -0.7);
-bike.add(backWheel);
-
-bike.position.set(0, 0.6, 0);
-scene.add(bike);
-
-const bikePhysics = new BikePhysics(bike);
-
-// Infinite Road
-const roadManager = new RoadManager(scene);
-
-// Traffic System
-const trafficManager = new TrafficManager(scene);
-
-// Enemy AI
-const enemyAI = new EnemyAI(scene, bike);
-
-// Combat System (Tracks both traffic and enemy AI)
-const combatSystem = new CombatSystem(bike, [trafficManager, enemyAI], effectsManager);
-
+// --- Game State Vars ---
+let bike, bikePhysics, roadManager, trafficManager, enemyAI, combatSystem, propManager;
+let gameState = 'LOADING'; // Start in LOADING state
 let totalTime = 0;
 let timeScale = 1.0;
+let raceTimer = 90;
+const finishZ = 5000;
+
+// UI Elements
 const speedFill = document.getElementById('speed-fill');
 const healthFill = document.getElementById('health-fill');
+const timerDisplay = document.getElementById('timer-display');
+const victoryOverlay = document.getElementById('victory-overlay');
+const defeatOverlay = document.getElementById('defeat-overlay');
+const defeatReason = document.getElementById('defeat-reason');
 
-function update(delta) {
-    // Recover from hit-stop
-    timeScale = THREE.MathUtils.lerp(timeScale, 1.0, 6 * delta);
-    const scaledDelta = delta * timeScale;
+// Global Debug Access
+window.game = {
+    get bike() { return bike; },
+    get bikePhysics() { return bikePhysics; },
+    get raceTimer() { return raceTimer; },
+    get gameState() { return gameState; },
+    get camera() { return camera; },
+    get audioManager() { return audioManager; },
+    get scene() { return scene; }
+};
+
+// --- Initialization ---
+async function initGame() {
+    console.log('Loading assets...');
+    await assetLoader.loadAll();
     
+    // Player Bike Setup
+    bike = assetLoader.getClone('bike');
+    if (!bike) {
+        bike = new THREE.Group();
+        const bodyGeo = new THREE.BoxGeometry(0.4, 0.8, 1.8);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        bike.add(new THREE.Mesh(bodyGeo, bodyMat));
+    } else {
+        // Precise scale and orientation fix
+        bike.rotation.y = Math.PI; 
+        bike.scale.set(0.02, 0.02, 0.02); 
+    }
+    bike.position.set(0, 0.1, 0); // Lowered Y to match smaller scale
+    scene.add(bike);
+    
+    // Core Component Setup
+    bikePhysics = new BikePhysics(bike);
+    roadManager = new RoadManager(scene);
+    trafficManager = new TrafficManager(scene, assetLoader);
+    enemyAI = new EnemyAI(scene, bike, assetLoader);
+    propManager = new PropManager(scene, assetLoader);
+    combatSystem = new CombatSystem(bike, [trafficManager, enemyAI], effectsManager);
+    
+    // Scene Finalization (already handled in createScene, but ensuring visibility)
+    scene.background = new THREE.Color(0x87ceeb);
+    
+    // Unlock Audio Context
+    window.addEventListener('mousedown', () => audioManager.init(), { once: true });
+    window.addEventListener('keydown', () => audioManager.init(), { once: true });
+    
+    gameState = 'RUNNING'; // NOW switch to running
+    console.log('Game Ready!');
+}
+
+// --- Main Loop ---
+function update(delta) {
+    if (gameState !== 'RUNNING') return;
+
+    const safeDelta = Math.min(delta, 0.1);
+    timeScale = THREE.MathUtils.lerp(timeScale, 1.0, 6 * safeDelta);
+    const scaledDelta = safeDelta * timeScale;
     totalTime += scaledDelta;
     
-    // Update bike physics with keyboard input
+    // Timer
+    raceTimer -= scaledDelta;
+    if (raceTimer <= 0) {
+        raceTimer = 0;
+        endGame('DEFEAT', 'OUT OF TIME');
+    }
+    
+    if (timerDisplay) {
+        const mins = Math.floor(raceTimer / 60);
+        const secs = Math.floor(raceTimer % 60);
+        timerDisplay.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    // Bike & System Updates
     bikePhysics.update(scaledDelta, controller.keys);
-    
-    // Update road recycling
     roadManager.update(bike.position.z);
-    
-    // Update traffic
+    propManager.update(bike.position.z);
     trafficManager.update(scaledDelta, bike.position.z);
-    
-    // Update Enemy AI
     enemyAI.update(scaledDelta, totalTime);
     
-    // Update effects (FOV, Shake)
+    // Effects & Audio
     effectsManager.update(delta, bikePhysics.speed);
     
-    // Update UI Bars
-    if (speedFill) {
-        const speedPercent = (bikePhysics.speed / bikePhysics.maxSpeed) * 100;
-        speedFill.style.width = `${Math.min(100, speedPercent)}%`;
-    }
-    if (healthFill) {
-        // Simple placeholder for health (decrease on crash)
-        const healthPercent = bikePhysics.isCrashed ? 20 : 100;
-        healthFill.style.width = `${healthPercent}%`;
-    }
+    // Update Audio
+    const speedPerc = Math.min(1.0, bikePhysics.speed / (bikePhysics.maxSpeed || 80));
+    audioManager.update(speedPerc);
     
-    // Update combat
+    // Camera Follow
+    updateCameraFollow(camera, bike, delta);
+    
+    // Combat & Collisions
     if (!bikePhysics.isCrashed) {
         const hit = combatSystem.update(scaledDelta, totalTime, controller.keys);
         if (hit) {
-            timeScale = 0.15; // "Hit Stop" effect
+            timeScale = 0.15;
+            audioManager.playCombatHit('punch');
         }
-    }
-    
-    // Update camera follow
-    updateCameraFollow(camera, bike, delta);
-    
-    // Check collisions if not already crashed
-    if (!bikePhysics.isCrashed) {
+        
+        // AI Attacks
+        if (enemyAI.keys.j || enemyAI.keys.k) {
+            const distZ = Math.abs(bike.position.z - enemyAI.mesh.position.z);
+            const distX = Math.abs(bike.position.x - enemyAI.mesh.position.x);
+            if (distZ < 2.5 && distX < 1.5) {
+                bikePhysics.takeDamage(15);
+                effectsManager.shake(0.8);
+                audioManager.playCombatHit('kick');
+                enemyAI.keys.j = enemyAI.keys.k = false;
+            }
+        }
+        
         checkCollisions();
     }
+    
+    // HUD Sync
+    if (speedFill) speedFill.style.width = `${(bikePhysics.speed / bikePhysics.maxSpeed) * 100}%`;
+    if (healthFill) healthFill.style.width = `${bikePhysics.health}%`;
+    
+    // Game Over Checks
+    if (bike.position.z >= finishZ) endGame('VICTORY');
+    if (bikePhysics.isDead) endGame('DEFEAT', 'BIKE DESTROYED');
 }
 
 function checkCollisions() {
     const playerPos = bike.position;
-    const cars = trafficManager.activeCars;
-    
-    for (const car of cars) {
+    for (const car of trafficManager.activeCars) {
         const dx = playerPos.x - car.position.x;
         const dz = playerPos.z - car.position.z;
-        
-        // Simple bounding box check
-        if (Math.abs(dx) < 1.5 && Math.abs(dz) < 3.2) {
+        if (Math.abs(dx) < 2.5 && Math.abs(dz) < 5.0) {
             bikePhysics.isCrashed = true;
-            effectsManager.shake(2.0); // Big shake on crash
-            console.log("CRASH DETECTED!");
+            bikePhysics.takeDamage(25);
+            effectsManager.shake(2.0);
+            audioManager.playCrash();
             break;
         }
+    }
+}
+
+function endGame(state, reason) {
+    gameState = state;
+    if (state === 'VICTORY') victoryOverlay.style.visibility = 'visible';
+    else {
+        defeatOverlay.style.visibility = 'visible';
+        defeatReason.innerText = reason || 'WASTED';
     }
 }
 
@@ -136,7 +188,6 @@ function render() {
     renderer.render(scene, camera);
 }
 
-// Start Game Loop
+// --- Bootstrap ---
+initGame();
 createLoop(update, render);
-
-console.log('Road Rash Clone Prototype Initialized');

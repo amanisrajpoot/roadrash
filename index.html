@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Road Rash Clone Prototype</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-transform: uppercase; }
+        body { margin: 0; overflow: hidden; background: #87ceeb; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-transform: uppercase; }
         #game-container { width: 100vw; height: 100vh; }
         #ui { 
             position: absolute; 
@@ -17,18 +17,47 @@
             padding: 20px;
             border-left: 5px solid #ff0000;
             backdrop-filter: blur(5px);
+            z-index: 10;
         }
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            visibility: hidden;
+            z-index: 100;
+            text-align: center;
+        }
+        .overlay h1 { font-size: 80px; margin-bottom: 20px; text-shadow: 0 0 20px #ff0000; }
+        .overlay p { font-size: 24px; color: #888; }
         .hud-label { font-size: 12px; color: #aaa; margin-bottom: 2px; }
         .bar-container { width: 200px; height: 12px; background: rgba(255,255,255,0.1); margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.2); }
         .bar-fill { height: 100%; background: #ff0000; width: 50%; transition: width 0.2s; }
         #speed-fill { background: #00ccff; box-shadow: 0 0 10px #00ccff; }
         #health-fill { background: #ff0044; box-shadow: 0 0 10px #ff0044; }
         .controls-hint { font-size: 10px; color: #888; margin-top: 10px; }
+        #timer-display { font-size: 32px; font-weight: bold; color: #fff; margin-bottom: 10px; font-family: 'Courier New', Courier, monospace; }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
+    
+    <div id="victory-overlay" class="overlay">
+        <h1 style="color: #00ff66; text-shadow: 0 0 20px #00ff66;">RACE WON</h1>
+        <p>MISSION ACCOMPLISHED</p>
+        <p style="font-size: 16px; margin-top: 30px;">Press F5 to Restart</p>
+    </div>
+    
+    <div id="defeat-overlay" class="overlay">
+        <h1>WASTED</h1>
+        <p id="defeat-reason">CRASHED AND BURNED</p>
+        <p style="font-size: 16px; margin-top: 30px;">Press F5 to Restart</p>
+    </div>
+
     <div id="ui">
+        <div id="timer-display">90:00</div>
+        
         <div class="hud-label">SPEED</div>
         <div class="bar-container"><div id="speed-fill" class="bar-fill" style="width: 0%;"></div></div>
         

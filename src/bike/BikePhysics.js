@@ -16,6 +16,23 @@ export class BikePhysics {
         this.currentTurn = 0;
         this.isCrashed = false;
         this.crashTimer = 0;
+        this.health = 100;
+        this.isDead = false;
+        
+        // Model-specific orientation fix
+        this.baseRotationY = Math.PI; // Face +Z
+        if (this.mesh) this.mesh.rotation.y = this.baseRotationY;
+    }
+    
+    takeDamage(amount) {
+        if (this.isDead) return;
+        this.health -= amount;
+        if (this.health <= 0) {
+            this.health = 0;
+            this.isDead = true;
+            this.isCrashed = true; // Force crash on death
+        }
+        console.log(`Health: ${this.health}%`);
     }
     
     update(delta, keys) {
@@ -67,7 +84,7 @@ export class BikePhysics {
         this.mesh.rotation.z = this.currentTilt;
         
         // Slight steering rotation (y-axis) for visual feedback
-        this.mesh.rotation.y = THREE.MathUtils.lerp(this.mesh.rotation.y, this.currentTurn * 0.15, 8 * delta);
+        this.mesh.rotation.y = THREE.MathUtils.lerp(this.mesh.rotation.y, this.baseRotationY + this.currentTurn * 0.15, 8 * delta);
     }
     
     handleCrashState(delta) {
@@ -95,8 +112,8 @@ export class BikePhysics {
         this.isCrashed = false;
         this.crashTimer = 0;
         this.speed = 20;
-        this.mesh.rotation.set(0, 0, 0);
-        this.mesh.position.y = 0.5;
+        this.mesh.rotation.set(0, this.baseRotationY, 0);
+        this.mesh.position.y = 0.1;
         this.currentTilt = 0;
         this.currentTurn = 0;
     }

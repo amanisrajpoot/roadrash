@@ -68,11 +68,42 @@ export class RoadManager {
                 tile.add(stripe);
             }
             
-            // Position tile along Z
             tile.position.z = i * this.tileSize;
             this.scene.add(tile);
             this.tiles.push(tile);
         }
+        
+        this.addFinishLine(5000);
+    }
+    
+    addFinishLine(z) {
+        const finishGeo = new THREE.PlaneGeometry(this.roadWidth, 5);
+        
+        // Checkered Canvas Texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, 128, 32);
+        ctx.fillStyle = 'black';
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 2; j++) {
+                if ((i + j) % 2 === 0) {
+                    ctx.fillRect(i * 16, j * 16, 16, 16);
+                }
+            }
+        }
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.repeat.set(4, 1);
+        
+        const finishMat = new THREE.MeshStandardMaterial({ map: texture });
+        const finishLine = new THREE.Mesh(finishGeo, finishMat);
+        finishLine.rotation.x = -Math.PI / 2;
+        finishLine.position.set(0, 0.05, z);
+        this.scene.add(finishLine);
     }
     
     update(playerZ) {

@@ -24,9 +24,10 @@ export class EffectsManager {
             this.shakeIntensity = Math.max(0, this.shakeIntensity - this.shakeDecay * delta);
         }
         
-        // Speed FOV effect
-        const targetFOV = this.baseFOV + (currentSpeed * 0.25);
-        this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFOV, 3 * delta);
+        // Speed FOV effect (Mapped 0-80 speed to 60-70 FOV)
+        const speedPerc = Math.min(1.0, currentSpeed / 80);
+        const targetFOV = 60 + (speedPerc * 10); // Reduced stretch
+        this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFOV, Math.min(1.0, 5 * delta));
         this.camera.updateProjectionMatrix();
     }
 }
