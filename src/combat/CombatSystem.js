@@ -66,26 +66,19 @@ export class CombatSystem {
         this.effectsManager.shake(type === 'kick' ? 1.0 : 0.5);
         
         const mesh = target.mesh || target;
-        const physics = target.physics || null;
-        
-        // Push target away from player
-        const dir = mesh.position.x > this.playerBike.position.x ? 1 : -1;
-        const pushForce = type === 'kick' ? 8 : 4;
-        
-        mesh.position.x += dir * pushForce;
-        
-        // If it's an AI bike with physics, affect it more
+        const physics = target.physics;
+
         if (physics) {
-            physics.isCrashed = true;
-            console.log("AI BIKE CRASHED!");
+            physics.isCrashed = true; // Trigger fall/crash state
+            
+            // Push BACK (Advantage System)
+            mesh.position.z -= 15; // Knock them back
+            physics.speed *= 0.2; // Massive slowdown
+            
+            physics.takeDamage(type === 'kick' ? 20 : 10);
         } else {
-            // Traffic car
-            mesh.rotation.z += dir * 0.5;
-            if (type === 'kick') {
-                target.speed *= 0.6;
-            } else {
-                target.speed *= 0.8;
-            }
+            // It's a traffic car
+            target.speed *= 0.5;
         }
     }
 }

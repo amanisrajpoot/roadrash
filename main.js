@@ -13,6 +13,10 @@ import { EffectsManager } from './src/utils/effects.js';
 import { AssetLoader } from './src/utils/AssetLoader.js';
 import { PropManager } from './src/world/PropManager.js';
 import { AudioManager } from './src/utils/AudioManager.js';
+import { RaceSystem } from './src/systems/RaceSystem.js';
+import { EconomySystem } from './src/systems/EconomySystem.js';
+import { PoliceSystem } from './src/systems/PoliceSystem.js';
+import { ProgressionSystem } from './src/systems/ProgressionSystem.js';
 
 // --- Essential Setup ---
 const renderer = createRenderer();
@@ -24,8 +28,10 @@ const assetLoader = new AssetLoader();
 const audioManager = new AudioManager();
 
 // --- Game State Vars ---
-let bike, bikePhysics, roadManager, trafficManager, enemyAI, combatSystem, propManager;
-let gameState = 'LOADING'; // Start in LOADING state
+let bike, bikePhysics, roadManager, trafficManager, enemies = [], combatSystem, propManager;
+let raceSystem, economy, police, progression;
+let _raceHandled = false;
+let gameState = 'LOADING'; 
 let totalTime = 0;
 let timeScale = 1.0;
 let raceTimer = 90;
@@ -72,11 +78,26 @@ async function initGame() {
     
     // Core Component Setup
     bikePhysics = new BikePhysics(bike);
+    window.bikePhysics = bikePhysics; // Expose for TrafficManager
     roadManager = new RoadManager(scene);
     trafficManager = new TrafficManager(scene, assetLoader);
-    enemyAI = new EnemyAI(scene, bike, assetLoader);
     propManager = new PropManager(scene, assetLoader);
-    combatSystem = new CombatSystem(bike, [trafficManager, enemyAI], effectsManager);
+    
+    // Multi-Enemy Setup
+    enemies = [
+        new EnemyAI(scene, bike, assetLoader, -4, 40),
+        new EnemyAI(scene, bike, assetLoader, 4, 30),
+        new EnemyAI(scene, bike, assetLoader, 0, 60)
+    ];
+    
+    // System Initialization
+    raceSystem = new RaceSystem(bike, enemies);
+    raceSystem.raceDistance = finishZ; 
+    economy = new EconomySystem();
+    police = new PoliceSystem(scene, bike, assetLoader);
+    progression = new ProgressionSystem();
+    
+    combatSystem = new CombatSystem(bike, [trafficManager, ...enemies], effectsManager);
     
     // Scene Finalization (already handled in createScene, but ensuring visibility)
     scene.background = new THREE.Color(0x87ceeb);
@@ -115,8 +136,40 @@ function update(delta) {
     bikePhysics.update(scaledDelta, controller.keys);
     roadManager.update(bike.position.z);
     propManager.update(bike.position.z);
-    trafficManager.update(scaledDelta, bike.position.z);
-    enemyAI.update(scaledDelta, totalTime);
+    trafficManager.update(scaledDelta, bike.position.z, bike, enemies);
+    
+    enemies.forEach(enemy => enemy.update(scaledDelta, totalTime));
+    
+    // New Systems Update
+    raceSystem.update();
+    police.update(scaledDelta);
+    
+    // Handle Race Finish
+    if (raceSystem.finished && !_raceHandled) {
+        _raceHandled = true;
+        const position = raceSystem.getPosition();
+        economy.reward(position);
+        if (position === 1) progression.registerWin();
+        
+        // Visual feedback for finish
+        if (position === 1) endGame('VICTORY');
+        else endGame('DEFEAT', `FINISHED ${position}${position===2?'ND':position===3?'RD':'TH'} PLACE`);
+    }
+
+    // Random Police Spawn
+    if (Math.random() < 0.002 && !police.active && bikePhysics.speed > 50) {
+        police.spawn();
+    }
+
+    // RACE PRESSURE SYSTEM (Constant Danger)
+    enemies.forEach(enemy => {
+        // Keep enemies near player if they fall too far behind
+        if (enemy.mesh.position.z < bike.position.z - 80) {
+            enemy.mesh.position.z = bike.position.z + 40;
+            enemy.physics.speed = bikePhysics.speed + 10;
+            enemy.state = "CHASE";
+        }
+    });
     
     // Effects & Audio
     effectsManager.update(delta, bikePhysics.speed);
@@ -137,16 +190,18 @@ function update(delta) {
         }
         
         // AI Attacks
-        if (enemyAI.keys.j || enemyAI.keys.k) {
-            const distZ = Math.abs(bike.position.z - enemyAI.mesh.position.z);
-            const distX = Math.abs(bike.position.x - enemyAI.mesh.position.x);
-            if (distZ < 2.5 && distX < 1.5) {
-                bikePhysics.takeDamage(15);
-                effectsManager.shake(0.8);
-                audioManager.playCombatHit('kick');
-                enemyAI.keys.j = enemyAI.keys.k = false;
+        enemies.forEach(enemy => {
+            if (enemy.keys.j || enemy.keys.k) {
+                const distZ = Math.abs(bike.position.z - enemy.mesh.position.z);
+                const distX = Math.abs(bike.position.x - enemy.mesh.position.x);
+                if (distZ < 2.5 && distX < 1.5) {
+                    bikePhysics.takeDamage(15);
+                    effectsManager.shake(0.8);
+                    audioManager.playCombatHit('kick');
+                    enemy.keys.j = enemy.keys.k = false;
+                }
             }
-        }
+        });
         
         checkCollisions();
     }
@@ -168,6 +223,7 @@ function checkCollisions() {
         if (Math.abs(dx) < 2.5 && Math.abs(dz) < 5.0) {
             bikePhysics.isCrashed = true;
             bikePhysics.takeDamage(25);
+            economy.penalty(); // Hook economy penalty
             effectsManager.shake(2.0);
             audioManager.playCrash();
             break;
@@ -176,6 +232,7 @@ function checkCollisions() {
 }
 
 function endGame(state, reason) {
+    if (gameState === 'ENDED') return;
     gameState = state;
     if (state === 'VICTORY') victoryOverlay.style.visibility = 'visible';
     else {

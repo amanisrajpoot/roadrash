@@ -47,7 +47,7 @@ export class TrafficManager {
         this.activeCars.push(car);
     }
     
-    update(delta, playerZ) {
+    update(delta, playerZ, playerMesh, enemies) {
         // Significantly less dense spawning as requested
         if (this.activeCars.length < 3 && Math.random() < 0.005) {
             this.spawn(playerZ);
@@ -58,6 +58,33 @@ export class TrafficManager {
             
             // Move car forward (+Z)
             car.position.z += car.speed * delta;
+
+            // --- INTERACTION LAYER ---
+            
+            // Player Collision Check
+            const pdx = car.position.x - playerMesh.position.x;
+            const pdz = car.position.z - playerMesh.position.z;
+            if (Math.abs(pdx) < 2.2 && Math.abs(pdz) < 3.5) {
+                // Not a full crash (yet), but a massive slowdown/bump
+                if (typeof window !== 'undefined' && window.bikePhysics) {
+                    window.bikePhysics.speed *= 0.5;
+                    window.bikePhysics.takeDamage(10);
+                }
+                car.speed *= 0.5;
+            }
+
+            // Enemy Collision Check
+            enemies.forEach(enemy => {
+                const edx = car.position.x - enemy.mesh.position.x;
+                const edz = car.position.z - enemy.mesh.position.z;
+                if (Math.abs(edx) < 2.0 && Math.abs(edz) < 3.0) {
+                    enemy.physics.isCrashed = true;
+                    enemy.physics.takeDamage(20);
+                    car.speed *= 0.5;
+                }
+            });
+
+            // --- END INTERACTION ---
             
             // Despawn if too far ahead OR passed by player
             const relativeZ = car.position.z - playerZ;

@@ -15,6 +15,8 @@ export class BikePhysics {
         this.currentTilt = 0;
         this.currentTurn = 0;
         this.isCrashed = false;
+        this.isFalling = false;
+        this.fallTimer = 0;
         this.crashTimer = 0;
         this.health = 100;
         this.isDead = false;
@@ -108,6 +110,15 @@ export class BikePhysics {
         }
     }
     
+    resetFall() {
+        this.isFalling = false;
+        this.isCrashed = false;
+        this.fallTimer = 0;
+        this.speed = 10;
+        this.mesh.rotation.z = 0;
+        this.mesh.rotation.y = this.baseRotationY;
+    }
+
     reset() {
         this.isCrashed = false;
         this.crashTimer = 0;

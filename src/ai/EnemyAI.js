@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { BikePhysics } from '../bike/BikePhysics.js';
 
 export class EnemyAI {
-    constructor(scene, player, assetLoader) {
+    constructor(scene, player, assetLoader, startX = 4, startZ = 30) {
         this.scene = scene;
         this.player = player; // Note: using 'player' instead of 'playerBike'
         this.loader = assetLoader;
+        this.startX = startX;
+        this.startZ = startZ;
         
         this.initMesh();
         
@@ -15,6 +17,7 @@ export class EnemyAI {
         this.keys = { w: true, s: false, a: false, d: false, j: false, k: false };
         this.attackCooldown = 1.5;
         this.lastAttack = 0;
+        this.state = "CHASE"; // CHASE | ATTACK | CRASHED
     }
 
     initMesh() {
@@ -41,57 +44,74 @@ export class EnemyAI {
             this.mesh.position.y = 0.1; // Lowered to match scale
         }
         
-        this.mesh.position.set(4, 0.1, 30);
+        this.mesh.position.set(this.startX, 0.1, this.startZ);
         this.scene.add(this.mesh);
     }
     
     update(delta, totalTime) {
         if (!this.mesh) return;
         
-        if (this.physics.isCrashed) {
+        const playerPos = this.player.position;
+        const myPos = this.mesh.position;
+        const distZ = playerPos.z - myPos.z;
+        const distX = playerPos.x - myPos.x;
+
+        // CRASH RECOVERY
+        if (this.physics.isCrashed || this.physics.isFalling) {
+            this.state = "CRASHED";
+        }
+
+        if (this.state === "CRASHED") {
+            this.keys.w = false;
             this.physics.update(delta, this.keys);
             
-            // Auto-reset enemy after crash
-            if (this.physics.crashTimer > 4) {
-                this.physics.reset();
-                this.mesh.position.z = this.player.position.z + 50;
+            if (this.physics.fallTimer > 3 || (!this.physics.isFalling && this.physics.crashTimer > 3)) {
+                this.state = "CHASE";
+                this.physics.resetFall();
+                this.mesh.position.z = this.player.position.z + 30; // Teleport ahead for pressure
             }
             return;
         }
-        
-        const playerPos = this.player.position;
-        const myPos = this.mesh.position;
-        
-        const distZ = playerPos.z - myPos.z;
-        const distX = playerPos.x - myPos.x;
-        
-        // Rubber-banding: if enemy is too far behind, teleport ahead
-        if (distZ > 150) {
-            this.mesh.position.z = playerPos.z + 50;
-            this.mesh.position.x = playerPos.x + (Math.random() - 0.5) * 10;
-            this.physics.speed = 40;
+
+        // STATE MACHINE
+        switch (this.state) {
+            case "CHASE":
+                this.keys.w = true;
+                // Move toward player X
+                this.mesh.position.x += distX * 0.03;
+                
+                // Close enough -> attack
+                if (Math.abs(distZ) < 5 && Math.abs(distX) < 3) {
+                    this.state = "ATTACK";
+                }
+                
+                // Match player speed + a bit
+                this.physics.speed = Math.max(30, distZ > 0 ? 70 : 30);
+                break;
+
+            case "ATTACK":
+                this.keys.w = true;
+                // Aggressive side movement (ramming/blocking)
+                this.mesh.position.x += Math.sign(distX) * 0.15; 
+                
+                // Swing!
+                if (totalTime - this.lastAttack > this.attackCooldown) {
+                    this.keys.j = true;
+                    this.lastAttack = totalTime;
+                } else {
+                    this.keys.j = false;
+                }
+
+                if (Math.abs(distZ) > 8 || Math.abs(distX) > 4) {
+                    this.state = "CHASE";
+                    this.keys.j = false;
+                }
+                break;
         }
-        
-        // Match speed or catch up
-        this.keys.w = distZ > 2;
-        this.keys.s = distZ < -2;
-        
-        // Smoothly follow player X position
+
+        // Smoothly clamp to road
         const ROAD_LIMIT = 10.0;
-        this.mesh.position.x += distX * 0.05; 
         this.mesh.position.x = THREE.MathUtils.clamp(this.mesh.position.x, -ROAD_LIMIT, ROAD_LIMIT);
-        
-        // Attack logic
-        if (Math.abs(distZ) < 4 && Math.abs(distX) < 3.5) {
-            if (totalTime - this.lastAttack > this.attackCooldown) {
-                this.keys.j = true;
-                this.lastAttack = totalTime;
-            } else {
-                this.keys.j = false;
-            }
-        } else {
-            this.keys.j = false;
-        }
         
         this.physics.update(delta, this.keys);
     }
